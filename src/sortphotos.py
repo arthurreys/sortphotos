@@ -10,6 +10,7 @@ Copyright (c) S. Andrew Ning. All rights reserved.
 
 from __future__ import print_function
 from __future__ import with_statement
+from functools import reduce
 import subprocess
 import os
 import sys
@@ -179,6 +180,11 @@ def check_for_early_morning_photos(date, day_begins):
     return date
 
 
+def split_comma_separated_arguments(arg, prefix):
+    split_arg = arg.split(",")
+    return [prefix] + reduce(lambda r, v: r+[prefix,v], split_arg[1:], split_arg[:1])
+
+
 #  this class is based on code from Sven Marnach (http://stackoverflow.com/questions/10075115/call-exiftool-from-a-python-script)
 class ExifTool(object):
     """used to run ExifTool from Python and keep it open"""
@@ -225,7 +231,7 @@ class ExifTool(object):
 
 
 
-def sortPhotos(src_dir, dest_dir, sort_format, rename_format, recursive=False,
+def sortPhotos(src_dir, dest_dir, ignore, extensions, sort_format, rename_format, recursive=False,
         copy_files=False, test=False, remove_duplicates=True, day_begins=0,
         additional_groups_to_ignore=['File'], additional_tags_to_ignore=[],
         use_only_groups=None, use_only_tags=None, verbose=True, keep_filename=False):
@@ -238,6 +244,10 @@ def sortPhotos(src_dir, dest_dir, sort_format, rename_format, recursive=False,
         directory containing files you want to process
     dest_dir : str
         directory where you want to move/copy the files to
+    ignore : str
+        comma-separated directory names to ignore. Can be full paths or only dir name
+    extensions : str
+        comma-separated extension names to include, e.g. 'jpg,mp4'
     sort_format : str
         date format code for how you want your photos sorted
         (https://docs.python.org/2/library/datetime.html#strftime-and-strptime-behavior)
@@ -297,6 +307,21 @@ def sortPhotos(src_dir, dest_dir, sort_format, rename_format, recursive=False,
     if recursive:
         args += ['-r']
 
+    if extensions:
+        extension_args = split_comma_separated_arguments(extensions, prefix="-ext")
+        args += extension_args
+
+        if verbose:
+            print(f'Looking for extensions: {extensions}')
+
+
+    if ignore:
+        ignore_args = split_comma_separated_arguments(ignore, prefix="-i")
+        args += ignore_args
+
+        if verbose:
+            print(f'Ignoring dirs: {ignore}')
+
     args += [src_dir]
 
 
@@ -309,6 +334,7 @@ def sortPhotos(src_dir, dest_dir, sort_format, rename_format, recursive=False,
     # setup output to screen
     num_files = len(metadata)
     print()
+    print("Ready to start file manage")
 
     if test:
         test_file_dict = {}
@@ -451,7 +477,9 @@ def main():
                                      description='Sort files (primarily photos and videos) into folders by date\nusing EXIF and other metadata')
     parser.add_argument('src_dir', type=str, help='source directory')
     parser.add_argument('dest_dir', type=str, help='destination directory')
-    parser.add_argument('-r', '--recursive', action='store_true', help='search src_dir recursively')
+    parser.add_argument('-r', '--recursive', action='store_true', default=False, help='search src_dir recursively')
+    parser.add_argument('-i', '--ignore', type=str, help='comma separated directories to ignore')
+    parser.add_argument('-e', '--extensions', type=str, help='comma separated extensions to include')
     parser.add_argument('-c', '--copy', action='store_true', help='copy files instead of move')
     parser.add_argument('-s', '--silent', action='store_true', help='don\'t display parsing details.')
     parser.add_argument('-t', '--test', action='store_true', help='run a test.  files will not be moved/copied\ninstead you will just a list of would happen')
@@ -494,7 +522,7 @@ def main():
     # parse command line arguments
     args = parser.parse_args()
 
-    sortPhotos(args.src_dir, args.dest_dir, args.sort, args.rename, args.recursive,
+    sortPhotos(args.src_dir, args.dest_dir, args.ignore, args.extensions, args.sort, args.rename, args.recursive,
         args.copy, args.test, not args.keep_duplicates, args.day_begins,
         args.ignore_groups, args.ignore_tags, args.use_only_groups,
         args.use_only_tags, not args.silent, args.keep_filename)
